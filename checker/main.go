@@ -42,13 +42,27 @@ func init() {
 type checkFunc func(appengine.Context, string, string, []string) error
 
 func index(w http.ResponseWriter, r *http.Request) {
+	var (
+		err error
+	)
 	c := appengine.NewContext(r)
 	u := user.Current(c)
+	if usr := getUser(c, u.String()); usr == nil {
+		usr = NewUser(u.String())
+		if err = usr.Save(c); err != nil {
+			panic(err)
+		}
+	} else {
+		if !usr.Active {
+			fmt.Fprintf(w, "User '%s' is not active!", u)
+			return
+		}
+	}
 	url, _ := user.LogoutURL(c, "/")
 	dd := struct {
 		UserName, LogoutUrl string
 	}{u.String(), url}
-	if err := tmpls.ExecuteTemplate(w, "main", dd); err != nil {
+	if err = tmpls.ExecuteTemplate(w, "main", dd); err != nil {
 		panic(err)
 	}
 }
@@ -66,20 +80,29 @@ func data(w http.ResponseWriter, r *http.Request) {
 }
 
 func check(w http.ResponseWriter, r *http.Request) {
+	var (
+		err  error
+		usrs []*User
+	)
 	c := appengine.NewContext(r)
-	confData, err := Configs(appengine.NewContext(r))
-	if err != nil {
+	if usrs, err = Users(c); err != nil {
 		panic(err)
 	}
-	for _, conf := range confData {
-		c.Infof("Check: %s - %v", conf.Name, conf)
-		err := funcMap[conf.CheckFuncName](c, conf.Name, conf.Url, conf.Emails)
+	for _, user := range usrs {
+		confData, err := ConfigsForUser(appengine.NewContext(r), user)
 		if err != nil {
-			fmt.Fprintf(w, fmt.Sprintf("ERROR: %s", err))
-			subject := fmt.Sprintf("Webchecker error %s", conf.Name)
-			message := fmt.Sprintf("Error: %s", err)
-			sendMail(c, subject, message, conf.Emails)
-			return
+			panic(err)
+		}
+		for _, conf := range confData {
+			c.Infof("Check: %s - %v", conf.Name, conf)
+			err := funcMap[conf.CheckFuncName](c, conf.Name, conf.Url, conf.Emails)
+			if err != nil {
+				fmt.Fprintf(w, fmt.Sprintf("ERROR: %s", err))
+				subject := fmt.Sprintf("Webchecker error %s", conf.Name)
+				message := fmt.Sprintf("Error: %s", err)
+				sendMail(c, subject, message, conf.Emails)
+				return
+			}
 		}
 	}
 	fmt.Fprintf(w, "OK!")
