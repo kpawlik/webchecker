@@ -1,0 +1,93 @@
+*{
+	font-size: 10px;
+	font-family: Verdana,Arial,sans-serif/*{ffDefault}*/;
+}
+.head{
+	display:inline-table;   
+	width:100%;
+}
+.header{
+	background-color: #999;
+	font-weight: bold;
+	color: #EEE;
+	font-size: 12px;
+}
+.table{
+	margin-top: 5px;
+	margin-bottom: 10px;
+	display:table;         
+  	border:1px solid  #666666;         
+  	border-spacing:2px;/*cellspacing:poor IE support for  this*/
+}
+.w5{
+	width:5%;
+}
+.w10{
+	width:10%;
+}
+.w20{
+	width:20%;
+}
+.w30{
+	width: 30%;
+}
+.w40{
+	width:40%;
+}
+.w50{
+	width: 50%;
+}
+.w60{
+	width: 60%;
+}
+.w100{
+	width: 100%;
+}
+.content{
+	cursor: default;
+}
+.content:hover{
+	background-color: #EE9;
+}
+.cell{
+	 float:left;
+  	 display:table-column;    
+	 padding: 5px;     
+}
+.row{
+	display:table-row;
+	background-color: #EEE;
+}
+.sbs { 
+	width: 80px; 
+	border: 1px solid black; 
+	background-color: #fdd;
+	display:inline-block;
+	text-align: center;
+	margin-right: 5px;
+}
+.sbs-l{
+	float: left;
+}
+.sbs-r{
+	float: right;
+}
+.title{
+	font-weight: bold;
+	color: #0000FF;
+}
+.footer {
+	float: none;
+}
+a{
+	text-decoration: none;
+	color: #333;
+	font-weight: bold;
+}
+a:hover{
+	text-decoration: underline;
+}
+.ui-button-text {
+    font-size: 10px;
+    padding: 1px 1px 1px 1px; /* Or whatever makes it small enough. */
+}
