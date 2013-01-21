@@ -41,6 +41,10 @@ func NewConfigFromRequest(r *http.Request) *Config {
 }
 
 func (cfg *Config) Save(c appengine.Context) (err error) {
+	if !includeKey(funcMap, cfg.CheckFuncName) {
+		err = errors.New(fmt.Sprintf("Incorect check method name: '%s'!", cfg.CheckFuncName))
+		return
+	}
 	u := getUserFromContext(c)
 	key := datastore.NewKey(c, configTableName, cfg.Name, 0, u.Key(c))
 	_, err = datastore.Put(c, key, cfg)
@@ -50,6 +54,10 @@ func (cfg *Config) Save(c appengine.Context) (err error) {
 func (cfg *Config) SaveAsNew(c appengine.Context) (err error) {
 	if isReservedName(cfg.Name) {
 		err = errors.New(fmt.Sprintf("This name '%s' is reserved", configTableName))
+		return
+	}
+	if !includeKey(funcMap, cfg.CheckFuncName) {
+		err = errors.New(fmt.Sprintf("Incorect check method name: '%s'!", cfg.CheckFuncName))
 		return
 	}
 	u := getUserFromContext(c)
@@ -64,7 +72,8 @@ func (cfg *Config) SaveAsNew(c appengine.Context) (err error) {
 }
 
 func (cfg *Config) Delete(c appengine.Context) (err error) {
-	key := datastore.NewKey(c, configTableName, cfg.Name, 0, nil)
+	u := getUserFromContext(c)
+	key := datastore.NewKey(c, configTableName, cfg.Name, 0, u.Key(c))
 	err = datastore.Delete(c, key)
 	return
 }
@@ -148,15 +157,6 @@ func getUserFromContext(c appengine.Context) (u *User) {
 	cusr := user.Current(c)
 	return getUser(c, cusr.String())
 }
-func isReservedName(name string) bool {
-	lname := strings.ToLower(name)
-	for i := 0; i < len(reservedNames); i++ {
-		if lname == strings.ToLower(reservedNames[i]) {
-			return true
-		}
-	}
-	return false
-}
 
 func Users(c appengine.Context) (usrs []*User, err error) {
 	q := datastore.NewQuery(userTabName)
@@ -173,4 +173,23 @@ func Users(c appengine.Context) (usrs []*User, err error) {
 		usrs = append(usrs, result)
 	}
 	return
+}
+
+func isReservedName(name string) bool {
+	lname := strings.ToLower(name)
+	for i := 0; i < len(reservedNames); i++ {
+		if lname == strings.ToLower(reservedNames[i]) {
+			return true
+		}
+	}
+	return false
+}
+
+func includeKey(m map[string]checkFunc, key string) bool {
+	for k, _ := range m {
+		if k == key {
+			return true
+		}
+	}
+	return false
 }

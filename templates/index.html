@@ -3,14 +3,14 @@
 <head>
 	<meta charset="utf-8" />
 	<link rel="stylesheet" href="media/css/style.css" type="text/css" media="all" />
-	<link rel="stylesheet" href="http://code.jquery.com/ui/1.9.2/themes/base/jquery-ui.css" type="text/css" media="all" />
-	<script src="http://code.jquery.com/jquery-1.9.0.min.js" type="text/javascript"></script>
-	<script src="http://code.jquery.com/ui/1.9.2/jquery-ui.js" type="text/javascript"></script>
+	<link rel="stylesheet" href="http://code.jquery.com/ui/1.10.0/themes/base/jquery-ui.css" type="text/css" media="all" />
+	<script src="http://code.jquery.com/jquery-1.9.0.js" type="text/javascript"></script>
+	<script src="http://code.jquery.com/ui/1.10.0/jquery-ui.js" type="text/javascript"></script>
 	<script src="media/js/scr.js" type="text/javascript" ></script>
 </head>
 <body>
 	<div class="head">
-		<div class="sbs-r">User: {{.UserName}}. <a href="{{.LogoutUrl}}">Sign out</a></div>
+		<div class="rightside">User: {{.UserName}}. <a href="{{.LogoutUrl}}">Sign out</a></div>
 	</div>
 	<div id="btAdd" class="bt">Add</div>
 	<div class="table w100" id="data">
@@ -44,8 +44,10 @@
 		</div>
 	</div>
 	<div id="delDialog">
+	<p><span class="ui-icon ui-icon-trash" style="float: left; margin: 0 7px 20px 0;"></p><p id="delDialogText"></p>
 	</div>
 	<div id="errDialog">
+	<p><span class="ui-icon ui-icon-alert" style="float: left; margin: 0 7px 20px 0;"></p><p id="errDialogText"></p>
 	</div>
 </body>
 </html>

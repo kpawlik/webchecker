@@ -22,12 +22,13 @@ $(window).load(function(){
 	 							modal: true,
 								title: "Delete",
 								width: 400,
-								height: 100});
+								height: 200});
 	$( "#errDialog" ).dialog({autoOpen: false,
 	 							modal: true,
 								title: "Error",
 								width: 400,
-								height: 100});
+								height: 200, 
+								buttons: {"Close": function() {$( this ).dialog( "close" );}}});
 	$( "#btAdd").button().click(function(){
 		$("#teName").attr("disabled", false);
 		$("#teName").val("");
@@ -93,7 +94,7 @@ function createRow(obj){
 	btDelete.data("row", row);
 	btDelete.button().click(function(){
 		var crow = $(this).data("row");
-		$("#delDialog").text("Delete record with name '"+crow.data("obj").Name+"'?");
+		$("#delDialogText").text("Delete record with name '"+crow.data("obj").Name+"'?");
 		$("#delDialog").dialog({buttons:[
 			{text: "OK",
 			click: function(){
@@ -155,7 +156,7 @@ function saveObject(obj, dialog, add){
 function handleError(data){
 	var error = data != "";
 	if(error){
-		$("#errDialog").text(data);
+		$("#errDialogText").text(data);
 		$("#errDialog").dialog("open");
 	}
 	return error;

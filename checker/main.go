@@ -1,9 +1,6 @@
 // main.go
 package checker
 
-//TODO: as a parameter of dataMap add function to check if page was updated, 
-//	check sum is not a good solution
-//TODO: move dataMap to datastore or maybe config file
 import (
 	"appengine"
 	"appengine/user"
@@ -16,11 +13,6 @@ import (
 var (
 	funcMap = map[string]checkFunc{"md5": checkMd5}
 	tmpls   *template.Template
-	/*confData = [...]*Config{
-	&Config{Name: "siis", Url: "https://form.teleinfrastruktura.gov.pl/help/", Emails: []string{"k.pawlik@astec.net", "kpawlik78@gmail.com"}, CheckFuncName: "md5"},
-	&Config{Name: "siis_xsd", Url: "https://form.teleinfrastruktura.gov.pl/static/help/siis2.2-8.xsd", Emails: []string{"k.pawlik@astec.net"}, CheckFuncName: "md5"},
-	&Config{Name: "Are you fucking coding me", Url: "http://areyoufuckingcoding.me/", Emails: []string{"kpawlik78@gmail.com"}, CheckFuncName: "md5"}}
-	*/
 )
 
 func init() {

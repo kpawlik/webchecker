@@ -8,6 +8,9 @@
 	color: #EEE;
 	font-size: 12px;
 }
+.rightside{
+	float: right;
+}
 .table{
 	margin-top: 5px;
 	margin-bottom: 10px;
