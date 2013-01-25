@@ -35,21 +35,25 @@ type checkFunc func(appengine.Context, string, string, []string) error
 
 func index(w http.ResponseWriter, r *http.Request) {
 	var (
-		err error
+		err  error
+		kusr Keyed
 	)
 	c := appengine.NewContext(r)
+	db := NewDB(c)
 	u := user.Current(c)
-	if usr := getUser(c, u.String()); usr == nil {
-		usr = NewUser(u.String())
-		if err = usr.Save(c); err != nil {
+	usr := NewUser(u.String())
+	if kusr, err = db.Get(usr, nil); kusr == nil {
+		if err = db.Save(usr, nil); err != nil {
 			panic(err)
 		}
 	} else {
+		usr, _ = kusr.(*User)
 		if !usr.Active {
 			fmt.Fprintf(w, "User '%s' is not active!", u)
 			return
 		}
 	}
+
 	url, _ := user.LogoutURL(c, "/")
 	dd := struct {
 		UserName, LogoutUrl string

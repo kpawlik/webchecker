@@ -88,3 +88,28 @@ func sendMail(c appengine.Context, subject, message string, emails []string) (er
 	}
 	return
 }
+
+func checkPage(c appengine.Context, conf *Config, usr *User) (err error) {
+	var (
+		checkSum string = ""
+		cr       Keyed
+	)
+	db := NewDB(c)
+	if pb, err := getPageBody(c, conf.Url); err != nil {
+		return err
+	} else {
+		checkSum = calcMd5(pb)
+	}
+	_ = checkSum
+	parentKey := conf.Key(c, usr.Key(c))
+	if cr, err = db.LastRec(nCheckResult, "-Date", parentKey); err != nil {
+		return err
+	}
+	if cr == nil {
+		cr = &CheckResult{time.Now().Format(`02-01-2006T15:04:05`), checkSum}
+		if err = db.Save(cr, parentKey); err != nil {
+			return
+		}
+	}
+	return
+}

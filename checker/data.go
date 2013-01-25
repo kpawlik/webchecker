@@ -40,13 +40,17 @@ func NewConfigFromRequest(r *http.Request) *Config {
 
 }
 
+func (cfg *Config) Key(c appengine.Context, parent *datastore.Key) *datastore.Key {
+	return datastore.NewKey(c, configTableName, cfg.Name, 0, parent)
+}
+
 func (cfg *Config) Save(c appengine.Context) (err error) {
 	if !includeKey(funcMap, cfg.CheckFuncName) {
 		err = errors.New(fmt.Sprintf("Incorect check method name: '%s'!", cfg.CheckFuncName))
 		return
 	}
 	u := getUserFromContext(c)
-	key := datastore.NewKey(c, configTableName, cfg.Name, 0, u.Key(c))
+	key := cfg.Key(c, u.Key(c))
 	_, err = datastore.Put(c, key, cfg)
 	return
 }
@@ -108,6 +112,34 @@ type CheckResult struct {
 	Md5  string
 }
 
+func (cr *CheckResult) NewKey(c appengine.Context, parent *datastore.Key) *datastore.Key {
+	return datastore.NewIncompleteKey(c, "CheckResult", parent)
+}
+
+func (cr *CheckResult) Save(c appengine.Context, parent *datastore.Key) error {
+	key := cr.NewKey(c, parent)
+	_, err := datastore.Put(c, key, cr)
+	return err
+}
+
+func LastCheckResult(c appengine.Context, parent *datastore.Key) (*CheckResult, error) {
+	result := &CheckResult{}
+	q := datastore.NewQuery("CheckResult").
+		Limit(1).
+		Order("-Date").Ancestor(parent)
+	for t := q.Run(c); ; {
+		_, err := t.Next(result)
+		if err == datastore.Done {
+			return result, nil
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	return nil, nil
+}
+
 func getLastCheckResult(c appengine.Context, key string) (result *CheckResult, err error) {
 	result = &CheckResult{}
 	q := datastore.NewQuery(key).
@@ -132,7 +164,7 @@ type User struct {
 }
 
 func NewUser(name string) *User {
-	return &User{name, true}
+	return &User{name, false}
 }
 
 func (u User) Key(c appengine.Context) *datastore.Key {
