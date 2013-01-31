@@ -50,7 +50,7 @@ func (cfg *Config) Save(c appengine.Context) (err error) {
 		return
 	}
 	u := getUserFromContext(c)
-	key := cfg.Key(c, u.Key(c))
+	key := cfg.Key(c, u.key(c, nil))
 	_, err = datastore.Put(c, key, cfg)
 	return
 }
@@ -65,7 +65,7 @@ func (cfg *Config) SaveAsNew(c appengine.Context) (err error) {
 		return
 	}
 	u := getUserFromContext(c)
-	key := datastore.NewKey(c, configTableName, cfg.Name, 0, u.Key(c))
+	key := datastore.NewKey(c, configTableName, cfg.Name, 0, u.key(c, nil))
 	err = datastore.Get(c, key, cfg)
 	if err == datastore.ErrNoSuchEntity {
 		_, err = datastore.Put(c, key, cfg)
@@ -77,19 +77,24 @@ func (cfg *Config) SaveAsNew(c appengine.Context) (err error) {
 
 func (cfg *Config) Delete(c appengine.Context) (err error) {
 	u := getUserFromContext(c)
-	key := datastore.NewKey(c, configTableName, cfg.Name, 0, u.Key(c))
+	key := datastore.NewKey(c, configTableName, cfg.Name, 0, u.key(c, nil))
 	err = datastore.Delete(c, key)
 	return
 }
 
 func Configs(c appengine.Context) (cfgs []*Config, err error) {
-	u := getUserFromContext(c)
-	cfgs, err = ConfigsForUser(c, u)
+	var kusr Keyed
+	db := NewDB(c)
+	u := user.Current(c)
+	if kusr, err = db.SaveNew(NewUser(u.String()), nil); err != nil {
+		return
+	}
+	cfgs, err = ConfigsForUser(c, kusr.(*User))
 	return
 }
 
 func ConfigsForUser(c appengine.Context, u *User) (cfgs []*Config, err error) {
-	q := datastore.NewQuery(configTableName).Ancestor(u.Key(c))
+	q := datastore.NewQuery(configTableName).Ancestor(u.key(c, nil))
 	for t := q.Run(c); ; {
 		result := &Config{}
 		_, err = t.Next(result)
@@ -164,15 +169,16 @@ type User struct {
 }
 
 func NewUser(name string) *User {
-	return &User{name, false}
+	return &User{name, true}
 }
 
+/*
 func (u User) Key(c appengine.Context) *datastore.Key {
 	return datastore.NewKey(c, userTabName, u.Name, 0, nil)
 }
-
+*/
 func (u *User) Save(c appengine.Context) error {
-	_, err := datastore.Put(c, u.Key(c), u)
+	_, err := datastore.Put(c, u.key(c, nil), u)
 	return err
 }
 

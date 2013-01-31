@@ -101,13 +101,13 @@ func checkPage(c appengine.Context, conf *Config, usr *User) (err error) {
 		checkSum = calcMd5(pb)
 	}
 	_ = checkSum
-	parentKey := conf.Key(c, usr.Key(c))
+	parentKey := conf.Key(c, usr.key(c, nil))
 	if cr, err = db.LastRec(nCheckResult, "-Date", parentKey); err != nil {
 		return err
 	}
 	if cr == nil {
 		cr = &CheckResult{time.Now().Format(`02-01-2006T15:04:05`), checkSum}
-		if err = db.Save(cr, parentKey); err != nil {
+		if _, err = db.Save(cr, parentKey); err != nil {
 			return
 		}
 	}

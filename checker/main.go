@@ -5,6 +5,7 @@ import (
 	"appengine"
 	"appengine/user"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -13,6 +14,8 @@ import (
 var (
 	funcMap = map[string]checkFunc{"md5": checkMd5}
 	tmpls   *template.Template
+	p       = fmt.Println
+	spf     = fmt.Sprintf
 )
 
 func init() {
@@ -28,7 +31,9 @@ func init() {
 	http.HandleFunc("/del", del)
 	http.HandleFunc("/save", save)
 	http.HandleFunc("/add", add)
+	http.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {})
 	http.HandleFunc("/", index)
+
 }
 
 type checkFunc func(appengine.Context, string, string, []string) error
@@ -37,39 +42,40 @@ func index(w http.ResponseWriter, r *http.Request) {
 	var (
 		err  error
 		kusr Keyed
+		ok   bool
+		usr  *User
 	)
 	c := appengine.NewContext(r)
 	db := NewDB(c)
 	u := user.Current(c)
-	usr := NewUser(u.String())
-	if kusr, err = db.Get(usr, nil); kusr == nil {
-		if err = db.Save(usr, nil); err != nil {
-			panic(err)
-		}
-	} else {
-		usr, _ = kusr.(*User)
-		if !usr.Active {
-			fmt.Fprintf(w, "User '%s' is not active!", u)
-			return
-		}
+	if kusr, err = db.SaveNew(NewUser(u.String()), nil); err != nil {
+		panicError(c, w, err)
 	}
-
+	if usr, ok = kusr.(*User); !ok || (ok && !usr.Active) {
+		serveError(c, w, errors.New(spf("User '%s' is not active!", u)))
+		return
+	}
 	url, _ := user.LogoutURL(c, "/")
+	//annonymous struct
 	dd := struct {
 		UserName, LogoutUrl string
-	}{u.String(), url}
+	}{usr.Name, url}
 	if err = tmpls.ExecuteTemplate(w, "main", dd); err != nil {
-		panic(err)
+		panicError(c, w, err)
 	}
 }
 
 func data(w http.ResponseWriter, r *http.Request) {
-	confData, err := Configs(appengine.NewContext(r))
-	if err != nil {
-		panic(err)
+	var (
+		confData []*Config
+		err      error
+	)
+	c := appengine.NewContext(r)
+	if confData, err = Configs(c); err != nil {
+		panicError(c, w, err)
 	}
 	if jsonData, err := json.Marshal(confData); err != nil {
-		panic(err)
+		panicError(c, w, err)
 	} else {
 		fmt.Fprintf(w, "%s", jsonData)
 	}
@@ -82,20 +88,20 @@ func check(w http.ResponseWriter, r *http.Request) {
 	)
 	c := appengine.NewContext(r)
 	if usrs, err = Users(c); err != nil {
-		panic(err)
+		panicError(c, w, err)
 	}
 	for _, user := range usrs {
 		confData, err := ConfigsForUser(appengine.NewContext(r), user)
 		if err != nil {
-			panic(err)
+			panicError(c, w, err)
 		}
 		for _, conf := range confData {
 			c.Infof("Check: %s - %v", conf.Name, conf)
 			err := funcMap[conf.CheckFuncName](c, conf.Name, conf.Url, conf.Emails)
 			if err != nil {
-				fmt.Fprintf(w, fmt.Sprintf("ERROR: %s", err))
-				subject := fmt.Sprintf("Webchecker error %s", conf.Name)
-				message := fmt.Sprintf("Error: %s", err)
+				fmt.Fprintf(w, spf("ERROR: %s", err))
+				subject := spf("Webchecker error %s", conf.Name)
+				message := spf("Error: %s", err)
 				sendMail(c, subject, message, conf.Emails)
 				return
 			}
@@ -129,4 +135,15 @@ func del(w http.ResponseWriter, r *http.Request) {
 	} else {
 		fmt.Fprintf(w, "")
 	}
+}
+
+func serveError(c appengine.Context, w http.ResponseWriter, err error) {
+	w.WriteHeader(http.StatusInternalServerError)
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	fmt.Fprintf(w, "Internal Server Error\n%v", err)
+}
+
+func panicError(c appengine.Context, w http.ResponseWriter, err error) {
+	serveError(c, w, err)
+	panic(err)
 }

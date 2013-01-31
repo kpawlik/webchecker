@@ -39,7 +39,10 @@ func (db *DB) LastRec(constr Constuctor, fieldName string, parent *datastore.Key
 	return nil, nil
 }
 
-func (db *DB) Get(obj Keyed, parent *datastore.Key) (res Keyed, err error) {
+func (db *DB) Get(obj Keyed, parent *datastore.Key) (res Keyed) {
+	var (
+		err error
+	)
 	key := obj.key(db.ctx, parent)
 	if err = datastore.Get(db.ctx, key, obj); err == datastore.ErrNoSuchEntity {
 		return
@@ -51,14 +54,18 @@ func (db *DB) Get(obj Keyed, parent *datastore.Key) (res Keyed, err error) {
 	return
 }
 
-func (db *DB) SaveNew(obj Keyed, parent *datastore.Key) error {
-	_, err := datastore.Put(db.ctx, obj.newKey(db.ctx, parent), obj)
-	return err
+func (db *DB) SaveNew(obj Keyed, parent *datastore.Key) (res Keyed, err error) {
+	if res = db.Get(obj, parent); res != nil {
+		p("GET - ", res)
+		return
+	}
+	_, err = datastore.Put(db.ctx, obj.key(db.ctx, parent), obj)
+	return obj, err
 }
 
-func (db *DB) Save(obj Keyed, parent *datastore.Key) error {
-	_, err := datastore.Put(db.ctx, obj.key(db.ctx, parent), obj)
-	return err
+func (db *DB) Save(obj Keyed, parent *datastore.Key) (res Keyed, err error) {
+	_, err = datastore.Put(db.ctx, obj.key(db.ctx, parent), obj)
+	return obj, err
 }
 
 //////////////////////////
