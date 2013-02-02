@@ -2,7 +2,6 @@ package checker
 
 import (
 	"appengine"
-	"appengine/datastore"
 	"appengine/mail"
 	"appengine/urlfetch"
 	"crypto/md5"
@@ -12,46 +11,33 @@ import (
 	"time"
 )
 
-func checkMd5(c appengine.Context, key, url string, emails []string) (err error) {
+func checkMd5(c appengine.Context, conf *Config) (ok bool, err error) {
 	var (
 		checkSum string
+		body     []byte
+		result   *CheckResult
 	)
-	if pb, e := getPageBody(c, url); err != nil {
-		err = e
+	if body, err = getPageBody(c, conf.Url); err != nil {
 		return
-	} else {
-		checkSum = calcMd5(pb)
 	}
-	result, e := getLastCheckResult(c, key)
-	fmt.Println(result)
-	if e != nil {
-		err = e
+	checkSum = calcMd5(body)
+	if result, err = conf.LastResult(c); err != nil {
 		return
 	}
 	if result.Date == "" {
-		k := datastore.NewIncompleteKey(c, key, nil)
-		wd := &CheckResult{time.Now().Format(`02-01-2006T15:04:05`), checkSum}
-		_, err = datastore.Put(c, k, wd)
-		if err != nil {
+		result.Date = time.Now().Format(`02-01-2006T15:04:05`)
+		result.Result = checkSum
+		result.Parent = conf.Name
+		err = result.SaveNew(c, conf)
+		ok = (err == nil)
+		return
+	}
+	if !result.Equal(checkSum) {
+		wd := &CheckResult{time.Now().Format(`02-01-2006T15:04:05`), checkSum, conf.Name}
+		if err = wd.SaveNew(c, conf); err != nil {
 			return
 		}
-	} else {
-		wd, e := getLastCheckResult(c, key)
-		if e != nil {
-			err = e
-			return
-		}
-		if wd.Md5 != checkSum {
-			subject := fmt.Sprintf("Web page %s was changed!", key)
-			message := fmt.Sprintf("Web page %s (%s) was changed!", key, url)
-			k := datastore.NewIncompleteKey(c, key, nil)
-			wd := &CheckResult{time.Now().Format(`02-01-2006T15:04:05`), checkSum}
-			_, err = datastore.Put(c, k, wd)
-			if err != nil {
-				return
-			}
-			err = sendMail(c, subject, message, emails)
-		}
+		ok = true
 	}
 	return
 }

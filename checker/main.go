@@ -23,6 +23,7 @@ func init() {
 	if tmpls, err = tmpls.ParseFiles("templates/index.html"); err != nil {
 		panic(err)
 	}
+	http.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {})
 	http.HandleFunc("/check", check)
 	http.HandleFunc("/data", data)
 	http.HandleFunc("/del", del)
@@ -31,44 +32,35 @@ func init() {
 	http.HandleFunc("/", index)
 }
 
-type checkFunc func(appengine.Context, string, string, []string) error
+type checkFunc func(appengine.Context, *Config) (bool, error)
 
 func index(w http.ResponseWriter, r *http.Request) {
 	var (
-		err error
+		usr *User
 	)
 	c := appengine.NewContext(r)
 	u := user.Current(c)
-	if usr := getUser(c, u.String()); usr == nil {
+	if usr = getUser(c, u.String()); usr == nil {
 		usr = NewUser(u.String())
-		if err = usr.Save(c); err != nil {
-			panic(err)
-		}
-	} else {
-		if !usr.Active {
-			fmt.Fprintf(w, "User '%s' is not active!", u)
-			return
-		}
+		handlePanic(w, usr.Save(c))
+	}
+	if !usr.Active {
+		http.Error(w, fmt.Sprintf("User '%s' is not active!", u), 401)
+		return
 	}
 	url, _ := user.LogoutURL(c, "/")
 	dd := struct {
 		UserName, LogoutUrl string
 	}{u.String(), url}
-	if err = tmpls.ExecuteTemplate(w, "main", dd); err != nil {
-		panic(err)
-	}
+	handlePanic(w, tmpls.ExecuteTemplate(w, "main", dd))
 }
 
 func data(w http.ResponseWriter, r *http.Request) {
 	confData, err := Configs(appengine.NewContext(r))
-	if err != nil {
-		panic(err)
-	}
-	if jsonData, err := json.Marshal(confData); err != nil {
-		panic(err)
-	} else {
-		fmt.Fprintf(w, "%s", jsonData)
-	}
+	handlePanic(w, err)
+	jsonData, err := json.Marshal(confData)
+	handlePanic(w, err)
+	fmt.Fprintf(w, "%s", jsonData)
 }
 
 func check(w http.ResponseWriter, r *http.Request) {
@@ -77,24 +69,21 @@ func check(w http.ResponseWriter, r *http.Request) {
 		usrs []*User
 	)
 	c := appengine.NewContext(r)
-	if usrs, err = Users(c); err != nil {
-		panic(err)
-	}
+	usrs, err = Users(c)
+	handlePanic(w, err)
 	for _, user := range usrs {
-		confData, err := ConfigsForUser(appengine.NewContext(r), user)
-		if err != nil {
-			panic(err)
+		if !user.Active {
+			continue
 		}
+		confData, err := user.Configs(appengine.NewContext(r))
+		handlePanic(w, err)
 		for _, conf := range confData {
 			c.Infof("Check: %s - %v", conf.Name, conf)
-			err := funcMap[conf.CheckFuncName](c, conf.Name, conf.Url, conf.Emails)
-			if err != nil {
-				fmt.Fprintf(w, fmt.Sprintf("ERROR: %s", err))
-				subject := fmt.Sprintf("Webchecker error %s", conf.Name)
-				message := fmt.Sprintf("Error: %s", err)
-				sendMail(c, subject, message, conf.Emails)
-				return
+			ok, err := funcMap[conf.CheckFuncName](c, conf)
+			if ok {
+				err = conf.Notify(c)
 			}
+			handlePanic(w, err)
 		}
 	}
 	fmt.Fprintf(w, "OK!")
@@ -125,4 +114,15 @@ func del(w http.ResponseWriter, r *http.Request) {
 	} else {
 		fmt.Fprintf(w, "")
 	}
+}
+
+func handlePanic(w http.ResponseWriter, err error) {
+	if err != nil {
+		handleError(w, err)
+		panic(err)
+	}
+}
+
+func handleError(w http.ResponseWriter, err error) {
+	http.Error(w, err.Error(), 500)
 }

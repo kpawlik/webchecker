@@ -1,9 +1,0 @@
-Handle error:
-
-func serveError(c appengine.Context, w http.ResponseWriter, err error) {
-	w.WriteHeader(http.StatusInternalServerError)
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	fmt.Fprintf(w, "Internal Server Error\n%v", err)
-}
-
-

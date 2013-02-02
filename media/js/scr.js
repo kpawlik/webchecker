@@ -2,6 +2,7 @@
 Web checker javascript library
 */
 $(window).load(function(){
+	$("body").hide();
 	$( "#addDialog" ).dialog({autoOpen: false,
 	 							modal: true,
 								title: "Add new record",
@@ -49,6 +50,7 @@ $(window).load(function(){
 		$( "#addDialog" ).dialog("open");
 	});
 	refreshTable();
+	$("body").show();
 });
 
 function refreshTable(){

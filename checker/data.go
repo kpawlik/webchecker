@@ -11,14 +11,14 @@ import (
 )
 
 const (
-	configTableName = "Cfg"
-	userTabName     = "Usr"
+	configTableName      = "Cfg"
+	userTabName          = "Usr"
+	checkResultTableName = "Result"
 )
 
-var (
-	reservedNames = []string{configTableName, userTabName}
-)
-
+/*************************************
+Config
+*************************************/
 type Config struct {
 	Name, Url, CheckFuncName string
 	Emails                   []string
@@ -52,10 +52,6 @@ func (cfg *Config) Save(c appengine.Context) (err error) {
 }
 
 func (cfg *Config) SaveAsNew(c appengine.Context) (err error) {
-	if isReservedName(cfg.Name) {
-		err = errors.New(fmt.Sprintf("This name '%s' is reserved", configTableName))
-		return
-	}
 	if !includeKey(funcMap, cfg.CheckFuncName) {
 		err = errors.New(fmt.Sprintf("Incorect check method name: '%s'!", cfg.CheckFuncName))
 		return
@@ -78,16 +74,20 @@ func (cfg *Config) Delete(c appengine.Context) (err error) {
 	return
 }
 
-func Configs(c appengine.Context) (cfgs []*Config, err error) {
-	u := getUserFromContext(c)
-	cfgs, err = ConfigsForUser(c, u)
-	return
+func (cfg *Config) Key(c appengine.Context, parent *datastore.Key) *datastore.Key {
+	if parent == nil {
+		u := user.Current(c)
+		parent = datastore.NewKey(c, userTabName, u.String(), 0, nil)
+	}
+	return datastore.NewKey(c, configTableName, cfg.Name, 0, parent)
 }
 
-func ConfigsForUser(c appengine.Context, u *User) (cfgs []*Config, err error) {
-	q := datastore.NewQuery(configTableName).Ancestor(u.Key(c))
+func (cfg *Config) LastResult(c appengine.Context) (result *CheckResult, err error) {
+	result = &CheckResult{}
+	q := datastore.NewQuery(checkResultTableName).
+		Limit(1).
+		Order("-Date").Ancestor(cfg.Key(c, nil))
 	for t := q.Run(c); ; {
-		result := &Config{}
 		_, err = t.Next(result)
 		if err == datastore.Done {
 			err = nil
@@ -96,36 +96,53 @@ func ConfigsForUser(c appengine.Context, u *User) (cfgs []*Config, err error) {
 		if err != nil {
 			return
 		}
-		cfgs = append(cfgs, result)
 	}
 	return
 }
 
+func (cfg *Config) Notify(c appengine.Context) error {
+	subject := fmt.Sprintf("Web page %s was changed!", cfg.Name)
+	message := fmt.Sprintf("Web page %s (%s) was changed!", cfg.Name, cfg.Url)
+	return sendMail(c, subject, message, cfg.Emails)
+}
+
+func Configs(c appengine.Context) ([]*Config, error) {
+	return getUserFromContext(c).Configs(c)
+}
+
+/*************************************
+CheckResult
+*************************************/
 // CheckResult - record to store shortcut or change to check and information
 // when last change was notoced.
 type CheckResult struct {
-	Date string
-	Md5  string
+	Date   string
+	Result string
+	Parent string
 }
 
-func getLastCheckResult(c appengine.Context, key string) (result *CheckResult, err error) {
-	result = &CheckResult{}
-	q := datastore.NewQuery(key).
-		Limit(1).
-		Order("-Date")
-	for t := q.Run(c); ; {
-		_, err = t.Next(result)
-		if err == datastore.Done {
-			err = nil
-			break
-		}
-		if err != nil {
-			return
-		}
-	}
-	return
+func (cr *CheckResult) NewKey(c appengine.Context, parent *Config) *datastore.Key {
+	return datastore.NewIncompleteKey(c, checkResultTableName, parent.Key(c, nil))
 }
 
+func (cr *CheckResult) Equal(checkSum string) bool {
+	return cr.Result == checkSum
+}
+
+func (cr *CheckResult) Save(c appengine.Context, parent *Config) error {
+	_, err := datastore.Put(c, cr.NewKey(c, parent), cr)
+	return err
+}
+
+func (cr *CheckResult) SaveNew(c appengine.Context, parent *Config) error {
+	k := datastore.NewIncompleteKey(c, checkResultTableName, parent.Key(c, nil))
+	_, err := datastore.Put(c, k, cr)
+	return err
+}
+
+/*************************************
+User
+*************************************/
 type User struct {
 	Name   string
 	Active bool
@@ -142,6 +159,23 @@ func (u User) Key(c appengine.Context) *datastore.Key {
 func (u *User) Save(c appengine.Context) error {
 	_, err := datastore.Put(c, u.Key(c), u)
 	return err
+}
+
+func (u *User) Configs(c appengine.Context) (cfgs []*Config, err error) {
+	q := datastore.NewQuery(configTableName).Ancestor(u.Key(c))
+	for t := q.Run(c); ; {
+		result := &Config{}
+		_, err = t.Next(result)
+		if err == datastore.Done {
+			err = nil
+			break
+		}
+		if err != nil {
+			return
+		}
+		cfgs = append(cfgs, result)
+	}
+	return
 }
 
 func getUser(c appengine.Context, name string) (u *User) {
@@ -175,16 +209,9 @@ func Users(c appengine.Context) (usrs []*User, err error) {
 	return
 }
 
-func isReservedName(name string) bool {
-	lname := strings.ToLower(name)
-	for i := 0; i < len(reservedNames); i++ {
-		if lname == strings.ToLower(reservedNames[i]) {
-			return true
-		}
-	}
-	return false
-}
-
+/*************************************
+Functions
+*************************************/
 func includeKey(m map[string]checkFunc, key string) bool {
 	for k, _ := range m {
 		if k == key {
