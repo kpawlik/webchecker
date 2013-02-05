@@ -4,42 +4,17 @@ import (
 	"appengine"
 	"appengine/mail"
 	"appengine/urlfetch"
+	"archive/zip"
+	"bytes"
 	"crypto/md5"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
-	"time"
 )
 
-func checkMd5(c appengine.Context, conf *Config) (ok bool, err error) {
-	var (
-		checkSum string
-		body     []byte
-		result   *CheckResult
-	)
-	if body, err = getPageBody(c, conf.Url); err != nil {
-		return
-	}
-	checkSum = calcMd5(body)
-	if result, err = conf.LastResult(c); err != nil {
-		return
-	}
-	if result.Date == "" {
-		result.Date = time.Now().Format(`02-01-2006T15:04:05`)
-		result.Result = checkSum
-		result.Parent = conf.Name
-		err = result.SaveNew(c, conf)
-		ok = (err == nil)
-		return
-	}
-	if !result.Equal(checkSum) {
-		wd := &CheckResult{time.Now().Format(`02-01-2006T15:04:05`), checkSum, conf.Name}
-		if err = wd.SaveNew(c, conf); err != nil {
-			return
-		}
-		ok = true
-	}
-	return
+func checkMd5(c appengine.Context, resbody, newbody []byte) (ok bool, err error) {
+	return calcMd5(newbody) == calcMd5(resbody), nil
 }
 
 func calcMd5(b []byte) string {
@@ -61,16 +36,37 @@ func getPageBody(c appengine.Context, url string) (body []byte, err error) {
 	return
 }
 
-func sendMail(c appengine.Context, subject, message string, emails []string) (err error) {
+func sendMail(c appengine.Context, subject, message string, emails []string, attachments []mail.Attachment) (err error) {
 	msg := &mail.Message{
-		Sender:  "WEB CHECKER <kpawlik78@gmail.com>",
-		To:      emails,
-		Subject: subject,
-		Body:    message,
+		Sender:      "WEB CHECKER <kpawlik78@gmail.com>",
+		To:          emails,
+		Subject:     subject,
+		Body:        message,
+		Attachments: attachments,
 	}
 	err = mail.Send(c, msg)
 	if err != nil {
 		c.Infof("Send email error: %v", err)
 	}
+	return
+}
+
+func createArchive(newResult, oldResult *CheckResult) (res []byte, err error) {
+	var (
+		f1, f2 io.Writer
+		fn     = "%s.txt"
+	)
+	b := new(bytes.Buffer)
+	z := zip.NewWriter(b)
+	if f1, err = z.Create(fmt.Sprintf(fn, newResult.Date)); err != nil {
+		return
+	}
+	f1.Write(newResult.Data)
+	if f2, err = z.Create(fmt.Sprintf(fn, oldResult.Date)); err != nil {
+		return
+	}
+	f2.Write(oldResult.Data)
+	z.Close()
+	res = b.Bytes()
 	return
 }

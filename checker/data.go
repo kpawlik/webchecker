@@ -3,6 +3,7 @@ package checker
 import (
 	"appengine"
 	"appengine/datastore"
+	"appengine/mail"
 	"appengine/user"
 	"errors"
 	"fmt"
@@ -14,6 +15,17 @@ const (
 	configTableName      = "Cfg"
 	userTabName          = "Usr"
 	checkResultTableName = "Result"
+	attachmentName       = "files.7z"
+	messageSubject       = "Web page %s was changed!"
+	messageText          = `Greetings user!
+
+Web page %s (%s) was changed.
+	
+Compare attached files to find more details.
+	
+---
+Best regards
+kpachecker`
 )
 
 /*************************************
@@ -68,9 +80,14 @@ func (cfg *Config) SaveAsNew(c appengine.Context) (err error) {
 }
 
 func (cfg *Config) Delete(c appengine.Context) (err error) {
-	u := getUserFromContext(c)
-	key := datastore.NewKey(c, configTableName, cfg.Name, 0, u.Key(c))
-	err = datastore.Delete(c, key)
+	var keys []*datastore.Key
+	if keys, err = cfg.ResultsKeys(c); err != nil {
+		return
+	}
+	if err = datastore.DeleteMulti(c, keys); err != nil {
+		return
+	}
+	err = datastore.Delete(c, cfg.Key(c, nil))
 	return
 }
 
@@ -100,10 +117,37 @@ func (cfg *Config) LastResult(c appengine.Context) (result *CheckResult, err err
 	return
 }
 
-func (cfg *Config) Notify(c appengine.Context) error {
-	subject := fmt.Sprintf("Web page %s was changed!", cfg.Name)
-	message := fmt.Sprintf("Web page %s (%s) was changed!", cfg.Name, cfg.Url)
-	return sendMail(c, subject, message, cfg.Emails)
+func (cfg *Config) ResultsKeys(c appengine.Context) (keys []*datastore.Key, err error) {
+	var (
+		key *datastore.Key
+	)
+	q := datastore.NewQuery(checkResultTableName).Ancestor(cfg.Key(c, nil)).KeysOnly()
+	for t := q.Run(c); ; {
+		key, err = t.Next(nil)
+		if err == datastore.Done {
+			err = nil
+			break
+		}
+		if err != nil {
+			return
+		}
+		keys = append(keys, key)
+	}
+	return
+}
+
+func (cfg *Config) Notify(c appengine.Context, newResult, oldResult *CheckResult) error {
+	var (
+		data []byte
+		err  error
+	)
+	if data, err = createArchive(newResult, oldResult); err != nil {
+		return err
+	}
+	attachs := []mail.Attachment{mail.Attachment{Name: attachmentName, Data: data}}
+	subject := fmt.Sprintf(messageSubject, cfg.Name)
+	message := fmt.Sprintf(messageText, cfg.Name, cfg.Url)
+	return sendMail(c, subject, message, cfg.Emails, attachs)
 }
 
 func Configs(c appengine.Context) ([]*Config, error) {
@@ -117,16 +161,12 @@ CheckResult
 // when last change was notoced.
 type CheckResult struct {
 	Date   string
-	Result string
+	Data   []byte
 	Parent string
 }
 
 func (cr *CheckResult) NewKey(c appengine.Context, parent *Config) *datastore.Key {
 	return datastore.NewIncompleteKey(c, checkResultTableName, parent.Key(c, nil))
-}
-
-func (cr *CheckResult) Equal(checkSum string) bool {
-	return cr.Result == checkSum
 }
 
 func (cr *CheckResult) Save(c appengine.Context, parent *Config) error {

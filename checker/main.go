@@ -8,6 +8,11 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"time"
+)
+
+const (
+	dataFormat = `02-01-2006T15-04-05`
 )
 
 var (
@@ -32,7 +37,7 @@ func init() {
 	http.HandleFunc("/", index)
 }
 
-type checkFunc func(appengine.Context, *Config) (bool, error)
+type checkFunc func(appengine.Context, []byte, []byte) (bool, error)
 
 func index(w http.ResponseWriter, r *http.Request) {
 	var (
@@ -65,8 +70,10 @@ func data(w http.ResponseWriter, r *http.Request) {
 
 func check(w http.ResponseWriter, r *http.Request) {
 	var (
-		err  error
-		usrs []*User
+		body   []byte
+		err    error
+		usrs   []*User
+		result *CheckResult
 	)
 	c := appengine.NewContext(r)
 	usrs, err = Users(c)
@@ -79,10 +86,28 @@ func check(w http.ResponseWriter, r *http.Request) {
 		handlePanic(w, err)
 		for _, conf := range confData {
 			c.Infof("Check: %s - %v", conf.Name, conf)
-			ok, err := funcMap[conf.CheckFuncName](c, conf)
-			if ok {
-				err = conf.Notify(c)
+			body, err = getPageBody(c, conf.Url)
+			handlePanic(w, err)
+			result, err = conf.LastResult(c)
+			handlePanic(w, err)
+			if result.Date == "" {
+				result.Date = time.Now().Format(dataFormat)
+				result.Data = body
+				result.Parent = conf.Name
+				handlePanic(w, result.SaveNew(c, conf))
+				continue
 			}
+			fmt.Println("res ", result.Date)
+			if ok, err := funcMap[conf.CheckFuncName](c, body, result.Data); ok {
+				continue
+			} else {
+				handlePanic(w, err)
+			}
+			wd := &CheckResult{time.Now().Format(dataFormat), body, conf.Name}
+			err = wd.SaveNew(c, conf)
+			handlePanic(w, err)
+			fmt.Println("wd ", wd.Date)
+			err = conf.Notify(c, wd, result)
 			handlePanic(w, err)
 		}
 	}
