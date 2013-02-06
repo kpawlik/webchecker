@@ -92,13 +92,13 @@ func check(w http.ResponseWriter, r *http.Request) {
 				handleError(w, c, err)
 				continue
 			}
-			result, err = conf.LastResult(c)
+			result, err = conf.LastResult(c, user)
 			handlePanic(w, c, err)
 			if result.Date == "" {
 				result.Date = time.Now().Format(dataFormat)
 				result.Data = body
 				result.Parent = conf.Name
-				handlePanic(w, c, result.SaveNew(c, conf))
+				handlePanic(w, c, result.SaveNew(c, conf, user))
 				continue
 			}
 			fmt.Println("res ", result.Date)
@@ -107,7 +107,7 @@ func check(w http.ResponseWriter, r *http.Request) {
 			}
 			handlePanic(w, c, err)
 			wd := &CheckResult{time.Now().Format(dataFormat), body, conf.Name}
-			handlePanic(w, c, wd.SaveNew(c, conf))
+			handlePanic(w, c, wd.SaveNew(c, conf, user))
 			handlePanic(w, c, conf.Notify(c, wd, result))
 		}
 	}

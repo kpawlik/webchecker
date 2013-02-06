@@ -102,11 +102,11 @@ func (cfg *Config) Key(c appengine.Context, parent *datastore.Key) *datastore.Ke
 	return datastore.NewKey(c, configTableName, cfg.Name, 0, parent)
 }
 
-func (cfg *Config) LastResult(c appengine.Context) (result *CheckResult, err error) {
+func (cfg *Config) LastResult(c appengine.Context, parent *User) (result *CheckResult, err error) {
 	result = &CheckResult{}
 	q := datastore.NewQuery(checkResultTableName).
 		Limit(1).
-		Order("-Date").Ancestor(cfg.Key(c, nil))
+		Order("-Date").Ancestor(cfg.Key(c, parent.Key(c)))
 	for t := q.Run(c); ; {
 		_, err = t.Next(result)
 		if err == datastore.Done {
@@ -177,8 +177,8 @@ func (cr *CheckResult) Save(c appengine.Context, parent *Config) error {
 	return err
 }
 
-func (cr *CheckResult) SaveNew(c appengine.Context, parent *Config) error {
-	k := datastore.NewIncompleteKey(c, checkResultTableName, parent.Key(c, nil))
+func (cr *CheckResult) SaveNew(c appengine.Context, cfg *Config, user *User) error {
+	k := datastore.NewIncompleteKey(c, checkResultTableName, cfg.Key(c, user.Key(c)))
 	_, err := datastore.Put(c, k, cr)
 	return err
 }

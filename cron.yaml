@@ -2,5 +2,4 @@ cron:
 - description: two hours check
   url: /check
   schedule: every 2 hours
-  login: admin
   timezone: Europe/Warsaw
