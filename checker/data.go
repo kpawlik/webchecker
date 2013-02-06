@@ -23,9 +23,12 @@ Web page %s (%s) was changed.
 	
 Compare attached files to find more details.
 	
+
 ---
 Best regards
-kpachecker`
+kpachecker
+
+(message send from: http://kpachecker.appspot.com/)`
 )
 
 /*************************************

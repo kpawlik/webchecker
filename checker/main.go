@@ -47,7 +47,7 @@ func index(w http.ResponseWriter, r *http.Request) {
 	u := user.Current(c)
 	if usr = getUser(c, u.String()); usr == nil {
 		usr = NewUser(u.String())
-		handlePanic(w, usr.Save(c))
+		handlePanic(w, c, usr.Save(c))
 	}
 	if !usr.Active {
 		http.Error(w, fmt.Sprintf("User '%s' is not active!", u), 401)
@@ -57,14 +57,15 @@ func index(w http.ResponseWriter, r *http.Request) {
 	dd := struct {
 		UserName, LogoutUrl string
 	}{u.String(), url}
-	handlePanic(w, tmpls.ExecuteTemplate(w, "main", dd))
+	handlePanic(w, c, tmpls.ExecuteTemplate(w, "main", dd))
 }
 
 func data(w http.ResponseWriter, r *http.Request) {
+	c := appengine.NewContext(r)
 	confData, err := Configs(appengine.NewContext(r))
-	handlePanic(w, err)
+	handlePanic(w, c, err)
 	jsonData, err := json.Marshal(confData)
-	handlePanic(w, err)
+	handlePanic(w, c, err)
 	fmt.Fprintf(w, "%s", jsonData)
 }
 
@@ -74,41 +75,40 @@ func check(w http.ResponseWriter, r *http.Request) {
 		err    error
 		usrs   []*User
 		result *CheckResult
+		ok     bool
 	)
 	c := appengine.NewContext(r)
 	usrs, err = Users(c)
-	handlePanic(w, err)
+	handlePanic(w, c, err)
 	for _, user := range usrs {
 		if !user.Active {
 			continue
 		}
 		confData, err := user.Configs(appengine.NewContext(r))
-		handlePanic(w, err)
+		handlePanic(w, c, err)
 		for _, conf := range confData {
-			c.Infof("Check: %s - %v", conf.Name, conf)
-			body, err = getPageBody(c, conf.Url)
-			handlePanic(w, err)
+			c.Infof("Checking: %s - %v", conf.Name, conf)
+			if body, err = getPageBody(c, conf.Url); err != nil {
+				handleError(w, c, err)
+				continue
+			}
 			result, err = conf.LastResult(c)
-			handlePanic(w, err)
+			handlePanic(w, c, err)
 			if result.Date == "" {
 				result.Date = time.Now().Format(dataFormat)
 				result.Data = body
 				result.Parent = conf.Name
-				handlePanic(w, result.SaveNew(c, conf))
+				handlePanic(w, c, result.SaveNew(c, conf))
 				continue
 			}
 			fmt.Println("res ", result.Date)
-			if ok, err := funcMap[conf.CheckFuncName](c, body, result.Data); ok {
+			if ok, err = funcMap[conf.CheckFuncName](c, body, result.Data); ok {
 				continue
-			} else {
-				handlePanic(w, err)
 			}
+			handlePanic(w, c, err)
 			wd := &CheckResult{time.Now().Format(dataFormat), body, conf.Name}
-			err = wd.SaveNew(c, conf)
-			handlePanic(w, err)
-			fmt.Println("wd ", wd.Date)
-			err = conf.Notify(c, wd, result)
-			handlePanic(w, err)
+			handlePanic(w, c, wd.SaveNew(c, conf))
+			handlePanic(w, c, conf.Notify(c, wd, result))
 		}
 	}
 	fmt.Fprintf(w, "OK!")
@@ -141,13 +141,15 @@ func del(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func handlePanic(w http.ResponseWriter, err error) {
+func handlePanic(w http.ResponseWriter, c appengine.Context, err error) {
 	if err != nil {
-		handleError(w, err)
+		handleError(w, c, err)
 		panic(err)
 	}
 }
 
-func handleError(w http.ResponseWriter, err error) {
+func handleError(w http.ResponseWriter, c appengine.Context, err error) {
+	c.Errorf("ERROR: %v", err)
+	sendMail(c, "KpaChecker Error", fmt.Sprintf("%v", err), []string{"kpawlik78@gmail.com"}, nil)
 	http.Error(w, err.Error(), 500)
 }

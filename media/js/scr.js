@@ -3,6 +3,19 @@ Web checker javascript library
 */
 $(window).load(function(){
 	$("body").hide();
+	$("#busyDialog").dialog({  autoOpen: false,    
+        dialogClass: "loadingScreenWindow",
+		title: "",
+        closeOnEscape: false,
+        draggable: false,
+		resizable: false,
+		modal: true,
+		width: 300, height: 50});
+	$(document).ajaxStart(function() {
+	   $("#busyDialog" ).dialog("open");
+ 	}).ajaxStop(function() {
+		$("#busyDialog" ).dialog("close");
+ 	});
 	$( "#addDialog" ).dialog({autoOpen: false,
 	 							modal: true,
 								title: "Add new record",

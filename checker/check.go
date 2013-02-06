@@ -38,7 +38,7 @@ func getPageBody(c appengine.Context, url string) (body []byte, err error) {
 
 func sendMail(c appengine.Context, subject, message string, emails []string, attachments []mail.Attachment) (err error) {
 	msg := &mail.Message{
-		Sender:      "WEB CHECKER <kpawlik78@gmail.com>",
+		Sender:      "KpaChecker <kpawlik78+wchecker@gmail.com>",
 		To:          emails,
 		Subject:     subject,
 		Body:        message,
