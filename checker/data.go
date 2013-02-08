@@ -57,7 +57,8 @@ func NewConfigFromRequest(r *http.Request) *Config {
 
 func (cfg *Config) Save(c appengine.Context) (err error) {
 	if !includeKey(funcMap, cfg.CheckFuncName) {
-		err = errors.New(fmt.Sprintf("Incorect check method name: '%s'!", cfg.CheckFuncName))
+		ks := keys(funcMap)
+		err = errors.New(fmt.Sprintf("Incorect check method name: '%s'!\nAllowed names %v", cfg.CheckFuncName, ks))
 		return
 	}
 	u := getUserFromContext(c)
@@ -68,7 +69,8 @@ func (cfg *Config) Save(c appengine.Context) (err error) {
 
 func (cfg *Config) SaveAsNew(c appengine.Context) (err error) {
 	if !includeKey(funcMap, cfg.CheckFuncName) {
-		err = errors.New(fmt.Sprintf("Incorect check method name: '%s'!", cfg.CheckFuncName))
+		ks := keys(funcMap)
+		err = errors.New(fmt.Sprintf("Incorect check method name: '%s'!\nAllowed names %v", cfg.CheckFuncName, ks))
 		return
 	}
 	u := getUserFromContext(c)
@@ -262,4 +264,12 @@ func includeKey(m map[string]checkFunc, key string) bool {
 		}
 	}
 	return false
+}
+
+func keys(m map[string]checkFunc) []string {
+	var keys []string
+	for k, _ := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }

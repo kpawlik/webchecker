@@ -16,8 +16,9 @@ const (
 )
 
 var (
-	funcMap = map[string]checkFunc{"md5": checkMd5}
-	tmpls   *template.Template
+	funcMap    = map[string]checkFunc{"cmp": compare}
+	tmpls      *template.Template
+	whiteChars = [...][]byte{[]byte("\t"), []byte(" "), []byte("\n")}
 )
 
 func init() {
