@@ -7,13 +7,13 @@ import (
 	"appengine/user"
 	"errors"
 	"fmt"
+	"github.com/kpawlik/guser"
 	"net/http"
 	"strings"
 )
 
 const (
 	configTableName      = "Cfg"
-	userTabName          = "Usr"
 	checkResultTableName = "Result"
 	attachmentName       = "files.7z"
 	messageSubject       = "Web page %s was changed!"
@@ -30,6 +30,35 @@ kpachecker
 
 (message send from: http://kpachecker.appspot.com/)`
 )
+
+/**********************
+User
+**********************/
+
+type User struct {
+	*guser.User
+}
+
+func NewUser(u *guser.User) *User {
+	return &User{u}
+}
+
+func (u *User) Configs(c appengine.Context) (cfgs []*Config, err error) {
+	q := datastore.NewQuery(configTableName).Ancestor(u.Key(c))
+	for t := q.Run(c); ; {
+		result := &Config{}
+		_, err = t.Next(result)
+		if err == datastore.Done {
+			err = nil
+			break
+		}
+		if err != nil {
+			return
+		}
+		cfgs = append(cfgs, result)
+	}
+	return
+}
 
 /*************************************
 Config
@@ -61,7 +90,7 @@ func (cfg *Config) Save(c appengine.Context) (err error) {
 		err = errors.New(fmt.Sprintf("Incorect check method name: '%s'!\nAllowed names %v", cfg.CheckFuncName, ks))
 		return
 	}
-	u := getUserFromContext(c)
+	u := guser.GetUserFromContext(c)
 	key := datastore.NewKey(c, configTableName, cfg.Name, 0, u.Key(c))
 	_, err = datastore.Put(c, key, cfg)
 	return
@@ -73,7 +102,7 @@ func (cfg *Config) SaveAsNew(c appengine.Context) (err error) {
 		err = errors.New(fmt.Sprintf("Incorect check method name: '%s'!\nAllowed names %v", cfg.CheckFuncName, ks))
 		return
 	}
-	u := getUserFromContext(c)
+	u := guser.GetUserFromContext(c)
 	key := datastore.NewKey(c, configTableName, cfg.Name, 0, u.Key(c))
 	err = datastore.Get(c, key, cfg)
 	if err == datastore.ErrNoSuchEntity {
@@ -99,7 +128,7 @@ func (cfg *Config) Delete(c appengine.Context) (err error) {
 func (cfg *Config) Key(c appengine.Context, parent *datastore.Key) *datastore.Key {
 	if parent == nil {
 		u := user.Current(c)
-		parent = datastore.NewKey(c, userTabName, u.String(), 0, nil)
+		parent = datastore.NewKey(c, guser.UsrTableName, u.String(), 0, nil)
 	}
 	return datastore.NewKey(c, configTableName, cfg.Name, 0, parent)
 }
@@ -156,7 +185,7 @@ func (cfg *Config) Notify(c appengine.Context, newResult, oldResult *CheckResult
 }
 
 func Configs(c appengine.Context) ([]*Config, error) {
-	return getUserFromContext(c).Configs(c)
+	return NewUser(guser.GetUserFromContext(c)).Configs(c)
 }
 
 /*************************************
@@ -183,75 +212,6 @@ func (cr *CheckResult) SaveNew(c appengine.Context, cfg *Config, user *User) err
 	k := datastore.NewIncompleteKey(c, checkResultTableName, cfg.Key(c, user.Key(c)))
 	_, err := datastore.Put(c, k, cr)
 	return err
-}
-
-/*************************************
-User
-*************************************/
-type User struct {
-	Name   string
-	Active bool
-}
-
-func NewUser(name string) *User {
-	return &User{name, true}
-}
-
-func (u User) Key(c appengine.Context) *datastore.Key {
-	return datastore.NewKey(c, userTabName, u.Name, 0, nil)
-}
-
-func (u *User) Save(c appengine.Context) error {
-	_, err := datastore.Put(c, u.Key(c), u)
-	return err
-}
-
-func (u *User) Configs(c appengine.Context) (cfgs []*Config, err error) {
-	q := datastore.NewQuery(configTableName).Ancestor(u.Key(c))
-	for t := q.Run(c); ; {
-		result := &Config{}
-		_, err = t.Next(result)
-		if err == datastore.Done {
-			err = nil
-			break
-		}
-		if err != nil {
-			return
-		}
-		cfgs = append(cfgs, result)
-	}
-	return
-}
-
-func getUser(c appengine.Context, name string) (u *User) {
-	u = &User{}
-	key := datastore.NewKey(c, userTabName, name, 0, nil)
-	if datastore.Get(c, key, u) == datastore.ErrNoSuchEntity {
-		u = nil
-	}
-	return
-}
-
-func getUserFromContext(c appengine.Context) (u *User) {
-	cusr := user.Current(c)
-	return getUser(c, cusr.String())
-}
-
-func Users(c appengine.Context) (usrs []*User, err error) {
-	q := datastore.NewQuery(userTabName)
-	for t := q.Run(c); ; {
-		result := &User{}
-		_, err = t.Next(result)
-		if err == datastore.Done {
-			err = nil
-			break
-		}
-		if err != nil {
-			return
-		}
-		usrs = append(usrs, result)
-	}
-	return
 }
 
 /*************************************

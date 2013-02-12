@@ -6,6 +6,7 @@ import (
 	"appengine/user"
 	"encoding/json"
 	"fmt"
+	"github.com/kpawlik/guser"
 	"html/template"
 	"net/http"
 	"time"
@@ -46,9 +47,11 @@ func index(w http.ResponseWriter, r *http.Request) {
 	)
 	c := appengine.NewContext(r)
 	u := user.Current(c)
-	if usr = getUser(c, u.String()); usr == nil {
-		usr = NewUser(u.String())
+	if gusr := guser.GetUser(c, u.String()); gusr == nil {
+		usr = NewUser(guser.NewUser(u.String()))
 		handlePanic(w, c, usr.Save(c))
+	} else {
+		usr = NewUser(gusr)
 	}
 	if !usr.Active {
 		http.Error(w, fmt.Sprintf("User '%s' is not active!", u), 401)
@@ -74,17 +77,18 @@ func check(w http.ResponseWriter, r *http.Request) {
 	var (
 		body   []byte
 		err    error
-		usrs   []*User
+		usrs   []*guser.User
 		result *CheckResult
 		ok     bool
 	)
 	c := appengine.NewContext(r)
-	usrs, err = Users(c)
+	usrs, err = guser.Users(c)
 	handlePanic(w, c, err)
-	for _, user := range usrs {
-		if !user.Active {
+	for _, guser := range usrs {
+		if !guser.Active {
 			continue
 		}
+		user := NewUser(guser)
 		confData, err := user.Configs(appengine.NewContext(r))
 		handlePanic(w, c, err)
 		for _, conf := range confData {
