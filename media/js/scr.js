@@ -2,7 +2,7 @@
 Web checker javascript library
 */
 $(window).load(function(){
-	$("body").hide();
+	
 	$("#busyDialog").dialog({  autoOpen: false,    
         dialogClass: "loadingScreenWindow",
 		title: "",
@@ -127,7 +127,8 @@ function createRow(obj){
 			$("#delDialog").dialog("open");				
 	});
 	row.append($("<div>").addClass("cell").addClass("w10").text(obj.Name));
-	row.append($("<div>").addClass("cell").addClass("w40").text(obj.Url));
+	var url = obj.Url;
+	row.append($("<div>").addClass("cell").addClass("w40").append($("<a>").attr("href",url).text(url)));
 	row.append($("<div>").addClass("cell").addClass("w10").text(obj.CheckFuncName));
 	row.append($("<div>").addClass("cell").addClass("w20").text(obj.Emails));
 	row.append($("<div>").addClass("cell").addClass("w5").append(btEdit));
