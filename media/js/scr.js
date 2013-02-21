@@ -146,7 +146,8 @@ function updateRow(obj){
 			break;
 		}
 	}
-	$(crow.find("div:eq(1)")[0]).text(obj.Url);
+	var url = obj.Url;
+	$(crow.find("div:eq(1)>a")[0]).attr("href",url).text(url);
 	$(crow.find("div:eq(2)")[0]).text(obj.CheckFuncName);
 	$(crow.find("div:eq(3)")[0]).text(obj.Emails);
 	crow.data("obj", obj);
